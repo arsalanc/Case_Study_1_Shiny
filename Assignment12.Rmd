@@ -1,0 +1,213 @@
+---
+title: "Unit 12 assignment"
+output: html_document
+date: '2022-07-11'
+author: "Arsalan"
+runtime: shiny
+
+---
+
+```{r setup, include=FALSE }
+knitr::opts_chunk$set(echo = TRUE)
+library(shiny)
+library(dplyr)
+```
+
+## IBU and ABV data
+
+
+```{r echo=FALSE}
+
+
+ui <- fluidPage(
+  
+  # App title ----
+  titlePanel("Unit 12 assignment"),
+  
+  # Sidebar layout with input and output definitions ----
+  sidebarLayout(
+    
+    # Sidebar panel for inputs ----
+    sidebarPanel(
+      fileInput('fileBeer', 'Choose Beers File',
+                  accept=c('text/csv', 'text/comma-separated- values,text/plain', '.csv')),
+      
+      fileInput('fileBrew', 'Choose Breweries File',
+                  accept=c('text/csv', 'text/comma-separated- values,text/plain', '.csv')),
+      
+      radioButtons("rbtn","Switch Plot",
+                   choices = c("Histogram", "Box Plot"),
+                   ),
+      
+      # Input: Slider for the number of bins ----
+      conditionalPanel(condition = "input.rbtn=='Histogram'",
+        sliderInput(inputId = "binsABV",
+                    label = "Number of bins for ABV:",
+                    min = 1,
+                    max = 50,
+                    value = 30),
+        sliderInput(inputId = "binsIBU",
+                    label = "Number of bins for IBU:",
+                    min = 1,
+                    max = 50,
+                    value = 30)
+      ),
+      selectInput(choices=c('ALL','AK','AL','AR','AZ','CA','CO','CT','DC','DE','FL','GA', 'HI','IA','ID','IL','IN','KS','KY','LA','MA','MD','ME', 'MI','MN','MO','MS','MT','NC','ND','NE','NH','NJ','NM', 'NV','NY','OH','OK','OR','PA','RI','SC','SD','TN','TX', 'UT','VA','VT','WA','WI','WV','WY'),inputId="States", label ="State"),
+      
+      radioButtons("regression","Linear Regression",
+                   choices = c("On", "Off"),
+                   )
+      
+      
+    ),
+    
+    # Main panel for displaying outputs ----
+    mainPanel(
+      conditionalPanel(condition = "input.rbtn=='Histogram'",plotOutput(outputId ='ABVPlot'),plotOutput(outputId='IBUPlot')),
+      conditionalPanel(condition = "input.rbtn=='Box Plot'",plotOutput(outputId ='ABVBox'),plotOutput(outputId='IBUBox')),
+      conditionalPanel(condition = "input.regression=='On'", plotOutput(outputId = "BeerPlotLm")),
+      conditionalPanel(condition = "input.regression=='Off'", plotOutput(outputId = "BeerPlot")),
+      #tableOutput(outputId = 'table.output')
+    )
+  )
+)
+server <- function(input, output) {
+  
+  mydata <- reactive({
+
+  inFile <- input$fileBeer
+  
+  inFile2 <- input$fileBrew
+  if (is.null(inFile) & is.null(inFile2))
+    return(NULL)
+  beers<- read.csv(inFile$datapath)
+  brews <- read.csv(inFile2$datapath)
+  
+  dat<- left_join(beers, brews, by= c("Brewery_id"= "Brew_ID"))%>%
+  rename("BeerName"= "Name.x", Brewery.Name="Name.y" )
+  return(dat)
+  })
+  #output$table.output <- renderTable({
+  #data = filter(mydata(),grepl('IN',State))
+  #})
+  
+  output$ABVPlot <-renderPlot({
+    
+    state <- input$States
+    if(state != "ALL"){
+      BeerABV = filter(mydata(),!is.na(ABV),grepl(state,State))
+
+    }
+    else{
+      BeerABV = mydata()%>% filter(!is.na(ABV))
+      
+    }
+    x <- BeerABV$ABV
+    bins <- seq(min(x), max(x), length.out = input$binsABV + 1)
+    
+    hist(x, breaks = bins, col = "#75AADB", border = "white",
+         xlab = "ABV",
+         main = "Histogram of ABV")
+    
+  })
+  output$IBUPlot <-renderPlot({
+    state <- input$States
+    if(state != "ALL"){
+      BeerIBU = filter(mydata(),!is.na(IBU),grepl(state,State))
+
+    }
+    else{
+      BeerIBU = mydata()%>% filter(!is.na(IBU))
+      
+    }
+    x <- BeerIBU$IBU
+    bins <- seq(min(x), max(x), length.out = input$binsIBU + 1)
+    
+    hist(x, breaks = bins, col = "#75AADB", border = "white",
+         xlab = "IBU",
+         main = "Histogram of IBU")
+    
+  })
+  
+  
+  output$ABVBox <-renderPlot({
+    
+    state <- input$States
+    
+    if(state != "ALL"){
+      BeerABV = filter(mydata(),!is.na(ABV),grepl(state,State))
+
+    }
+    else{
+      BeerABV = mydata()%>% filter(!is.na(ABV))
+      
+    } 
+    x <- BeerABV$ABV
+    boxplot(x, col = "#75AADB",
+         ylab = "ABV",
+         main = "Boxplot of ABV")
+    
+  })
+  
+  output$IBUBox <-renderPlot({
+    state <- input$States
+    if(state != "ALL"){
+      BeerIBU = filter(mydata(),!is.na(IBU),grepl(state,State))
+
+    }
+    else{
+      BeerIBU = mydata()%>% filter(!is.na(IBU))
+    }
+    
+    x <- BeerIBU$IBU
+    boxplot(x, col = "#75AADB",
+         ylab = "IBU",
+         main = "Boxplot of IBU")
+    
+  })
+  
+  output$BeerPlotLm <-renderPlot({
+    
+    state <- input$States
+    if(state != "ALL"){
+      Beer = filter(mydata(),!is.na(IBU),!is.na(ABV),grepl(state,State))
+
+    }
+    else{
+      Beer = mydata()%>% filter(!is.na(IBU) & !is.na(ABV))
+    }
+    x <- Beer$ABV
+    y <- Beer$IBU
+    
+    plot(x,y, col = "black",pch=20,
+         ylab = "IBU",
+         xlab = "ABV",
+         main = "ABV vs IBU")
+    abline(lm(y ~ x),col="red",lwd=3)
+  })
+  
+  output$BeerPlot <-renderPlot({
+    state <- input$States
+    if(state != "ALL"){
+      Beer = filter(mydata(),!is.na(IBU),!is.na(ABV),grepl(state,State))
+
+    }
+    else{
+      Beer = mydata()%>% filter(!is.na(IBU) & !is.na(ABV))
+    }
+    x <- Beer$ABV
+    y <- Beer$IBU
+    
+    plot(x,y, col = "black",pch=20,
+         ylab = "IBU",
+         xlab = "ABV",
+         main = "ABV vs IBU")
+  })
+  
+}
+
+
+shinyApp(ui, server)
+
+
+```
